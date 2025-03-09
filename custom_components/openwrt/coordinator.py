@@ -314,7 +314,10 @@ class DeviceCoordinator:
         return result
 
     async def load_ubus(self):
-        return await self._ubus.api_list()
+        result = await self._ubus.api_list()
+        _LOGGER.debug(f"Ubus API list result: {result}")
+        return result
+
 
     def is_api_supported(self, name: str) -> bool:
         if self._apis and name in self._apis:
