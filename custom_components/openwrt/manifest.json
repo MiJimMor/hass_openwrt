@@ -1,8 +1,8 @@
 {
-  "domain": "openwrt",
+  "domain": "xiaomi_openwrt",
   "name": "OpenWrt",
-  "documentation": "https://github.com/kvj/hass_openwrt",
-  "issue_tracker": "https://github.com/kvj/hass_openwrt/issues",
+  "documentation": "https://github.com/MiJimMor/hass_openwrt",
+  "issue_tracker": "https://github.com/MiJimMor/hass_openwrt/issues",
   "dependencies": [],
   "codeowners": ["@kvj"],
   "requirements": [],
