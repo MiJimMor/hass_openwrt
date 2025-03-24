@@ -25,6 +25,10 @@ async def async_setup_entry(
     device = hass.data[DOMAIN]['devices'][entry.entry_id]
     device_id = data['data']['id']
 
+    # Add hosts sensor
+    entities.append(HostsSensor(device, device_id))
+
+
     wireless = []
     for net_id in device.coordinator.data['wireless']:
         sensor = WirelessClientsSensor(device, device_id, net_id)
@@ -273,3 +277,38 @@ class WanRxTxSensor(OpenWrtSensor):
     @property
     def state_class(self):
         return "total_increasing"
+
+class HostsSensor(OpenWrtSensor):
+    def __init__(self, device, device_id: str):
+        super().__init__(device, device_id)
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:devices"
+
+    @property
+    def unique_id(self):
+        return "%s.hosts" % (super().unique_id)
+
+    @property
+    def name(self):
+        return f"{super().name} Known Hosts"
+
+    @property
+    def state(self):
+        if "hosts" not in self.data:
+            return 0
+        return len(self.data["hosts"])
+
+    @property
+    def extra_state_attributes(self):
+        if "hosts" not in self.data:
+            return {}
+        
+        result = {}
+        for mac, host_data in self.data["hosts"].items():
+            ip = host_data.get("ip", "")
+            name = host_data.get("name", "")
+            display_name = name if name else mac
+            if ip:
+                result[display_name] = ip
+        
+        return result

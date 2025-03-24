@@ -313,13 +313,51 @@ class DeviceCoordinator:
             }
         return result
 
+    async def fetch_host_hints(self):
+        """Fetch host hints from luci-rpc."""
+        if not self.is_api_supported("luci-rpc"):
+            _LOGGER.debug(f"Device [{self._id}] doesn't support luci-rpc")
+            return {}
+        
+        try:
+            response = await self._ubus.api_call(
+                "luci-rpc",
+                "getHostHints",
+                {}
+            )
+            _LOGGER.debug(f"Host hints response: {response}")
+            
+            # Process the response to extract mac, ip, and name
+            hosts = {}
+            for mac, data in response.items():
+                ip_addresses = data.get("ipaddrs", [])
+                name = data.get("name", "")
+                hosts[mac] = {
+                    "ip": ip_addresses[0] if ip_addresses else "",
+                    "name": name,
+                    "mac": mac
+                }
+            
+            return hosts
+        except Exception as err:
+            _LOGGER.warning(f"Failed to get host hints for device [{self._id}]: {err}")
+            return {}
+
     async def load_ubus(self):
-        return await self._ubus.api_list()
+        _LOGGER.debug("Calling load_ubus()")
+        result = await self._ubus.api_list()
+        _LOGGER.debug(f"Result of load_ubus: {result}")
+        return result
 
     def is_api_supported(self, name: str) -> bool:
+        _LOGGER.debug(f"Checking if the API '{name}' is supported")
         if self._apis and name in self._apis:
+            _LOGGER.debug(f"The API '{name}' is supported")
             return True
+        _LOGGER.debug(f"The API '{name}' is NOT supported")
         return False
+
+
 
     def make_async_update_data(self):
         async def async_update_data():
@@ -333,6 +371,9 @@ class DeviceCoordinator:
                 result['mesh'] = await self.update_mesh(wireless_config['mesh'])
                 result["mwan3"] = await self.discover_mwan3()
                 result["wan"] = await self.update_wan_info()
+                # Add the host hints data
+                result["hosts"] = await self.fetch_host_hints()
+
                 _LOGGER.debug(f"Full update [{self._id}]: {result}")
                 return result
             except PermissionError as err:

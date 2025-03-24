@@ -39,26 +39,30 @@
 
 ```jsonc
 {
-  "hass": {
-    "description": "Home Assistant OpenWrt integration permissions",
-    "read": {
-      "ubus": {
-        "network.wireless": ["status"],
-        "network.device": ["status"],
-        "iwinfo": ["info", "assoclist"],
-        "hostapd.*": ["get_clients", "wps_status"],
-        "system": ["board"],
-        "mwan3": ["status"]
-      },
-    },
-    "write": {
-      "ubus": {
-        "system": ["reboot"],
-        "hostapd.*": ["wps_start", "wps_cancel"]
-      }
+    "hass": {
+        "description": "Home Assistant OpenWrt integration permissions",
+        "read": {
+            "ubus": {
+                "network.wireless": ["status"],
+                "network.device": ["status"],
+                "iwinfo": ["info", "assoclist"],
+                "hostapd.*": ["get_clients", "wps_status"],
+                "system": ["board"],
+                "mwan3": ["status"],
+                "hostapd.*": ["get_clients"],
+                "uci": ["get"],
+                "luci-rpc": ["getHostHints"]
+            }
+        },
+        "write": {
+            "ubus": {
+                "system": ["reboot"],
+                "hostapd.*": ["wps_start", "wps_cancel"],
+            }
+        }
     }
-  }
 }
+
 
 ```
 
