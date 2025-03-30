@@ -94,9 +94,33 @@ class WirelessClientsSensor(OpenWrtSensor):
     def extra_state_attributes(self):
         result = dict()
         data = self.data['wireless'][self._interface_id]
-        for key, value in data.get("macs", {}).items():
+        
+        # Get host information from hosts data
+        hosts_data = self.data.get('hosts', {})
+        mac_to_ip = {}
+        mac_to_name = {}
+        
+        # Create mappings from MAC to IP and name
+        for mac, host_info in hosts_data.items():
+            mac_lower = mac.lower()  # Store lowercase MAC for consistent matching
+            mac_to_ip[mac_lower] = host_info.get("ip", "")
+            mac_to_name[mac_lower] = host_info.get("name", "")
+        
+        # Add client information with IP and name if available
+        for mac, value in data.get("macs", {}).items():
+            mac_lower = mac.lower()
             signal = value.get("signal", 0)
-            result[key.upper()] = f"{signal} dBm"
+            client_info = f"{signal} dBm"
+            
+            # Add IP and name information if available
+            if mac_lower in mac_to_ip and mac_to_ip[mac_lower]:
+                client_info += f" | IP: {mac_to_ip[mac_lower]}"
+                
+            if mac_lower in mac_to_name and mac_to_name[mac_lower]:
+                client_info += f" | Nombre: {mac_to_name[mac_lower]}"
+                
+            result[mac.upper()] = client_info
+            
         return result
 
     @property
@@ -303,12 +327,35 @@ class HostsSensor(OpenWrtSensor):
         if "hosts" not in self.data:
             return {}
         
-        result = {}
+        # Organize hosts by IP address
+        ip_to_host = {}
         for mac, host_data in self.data["hosts"].items():
             ip = host_data.get("ip", "")
             name = host_data.get("name", "")
-            display_name = name if name else mac
-            if ip:
-                result[display_name] = ip
+            if ip:  # Only include hosts with IP addresses
+                ip_to_host[ip] = {
+                    "name": name,
+                    "mac": mac
+                }
+        
+        # Sort by IP address (numerically)
+        sorted_ips = sorted(ip_to_host.keys(), key=self._sort_ip)
+        
+        # Create result with the format "IP : Nombre : MAC"
+        result = {}
+        for ip in sorted_ips:
+            host_info = ip_to_host[ip]
+            name = host_info["name"] if host_info["name"] else "Desconocido"
+            mac = host_info["mac"]
+            result[ip] = f"{name} : {mac}"
         
         return result
+    
+    def _sort_ip(self, ip):
+        """Helper function to sort IPs numerically"""
+        try:
+            # Convert each octet to int for proper numerical sorting
+            return [int(n) for n in ip.split('.')]
+        except (ValueError, AttributeError):
+            # In case of invalid IP format, return a default value
+            return [999, 999, 999, 999]

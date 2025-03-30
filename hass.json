@@ -9,8 +9,8 @@
                 "hostapd.*": ["get_clients", "wps_status"],
                 "system": ["board"],
                 "mwan3": ["status"],
-                "uci": ["get"],
-                "luci-rpc": ["getHostHints"]
+                "luci-rpc": ["getHostHints"],
+                "uci": ["get"]
             }
         },
         "write": {
