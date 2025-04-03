@@ -80,7 +80,10 @@ class WirelessClientsSensor(OpenWrtSensor):
 
     @property
     def name(self):
-        return "%s Wireless [%s] clients" % (super().name, self._interface_id)
+        #return "%s Wireless [%s] clients" % (super().name, self._interface_id)
+        # Get the SSID from the data, or use the interface ID if not available
+        ssid = self.data['wireless'][self._interface_id].get('ssid', self._interface_id)
+        return "%s Wireless [%s] clients" % (super().name, ssid)
 
     @property
     def state(self):
@@ -94,9 +97,12 @@ class WirelessClientsSensor(OpenWrtSensor):
     def extra_state_attributes(self):
         result = dict()
         data = self.data['wireless'][self._interface_id]
+        _LOGGER.debug(f"Generando atributos para {self._interface_id} con datos: {data}")
         
         # Get host information from hosts data
         hosts_data = self.data.get('hosts', {})
+        _LOGGER.debug(f"Datos de hosts disponibles: {len(hosts_data)} entradas")
+        
         mac_to_ip = {}
         mac_to_name = {}
         
@@ -120,7 +126,10 @@ class WirelessClientsSensor(OpenWrtSensor):
                 client_info += f" | Nombre: {mac_to_name[mac_lower]}"
                 
             result[mac.upper()] = client_info
-            
+
+        # Include the SSID in the sensor attributes
+        if 'ssid' in data:
+            result['ssid'] = data['ssid']            
         return result
 
     @property
@@ -233,6 +242,14 @@ class WirelessTotalClientsSensor(OpenWrtSensor):
     def icon(self):
         return 'mdi:wifi-off' if self.state == 0 else 'mdi:wifi'
 
+    @property
+    def extra_state_attributes(self):
+        # Add SSID information as attributes
+        result = {}
+        for sensor in self._sensors:
+            ssid = sensor.data['wireless'][sensor._interface_id].get('ssid', sensor._interface_id)
+            result[ssid] = sensor.state
+        return result
 
 class Mwan3OnlineSensor(OpenWrtSensor):
 
@@ -305,7 +322,7 @@ class WanRxTxSensor(OpenWrtSensor):
 class HostsSensor(OpenWrtSensor):
     def __init__(self, device, device_id: str):
         super().__init__(device, device_id)
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        #self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_icon = "mdi:devices"
 
     @property

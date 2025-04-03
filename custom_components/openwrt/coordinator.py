@@ -56,11 +56,19 @@ class DeviceCoordinator:
                     continue
                 for iface in item['interfaces']:
                     if 'ifname' not in iface:
+                        _LOGGER.debug(f"iface {iface} no tiene ifname")
                         continue
                     conf = dict(ifname=iface['ifname'],
                                 network=iface['config']['network'][0])
                     if iface['config']['mode'] == 'ap':
+                        # This is where we extract the SSID  
+                        ssid = iface['config'].get('ssid')  # We use .get() to avoid errors if 'ssid' does not exist  
+                        if ssid:
+                            conf['ssid'] = ssid # We add the SSID to the conf dictionary.
+                        else:
+                            _LOGGER.debug(f"SSID of {iface['ifname']} not found")
                         if len(wifi_devices) and iface['ifname'] not in wifi_devices:
+                            _LOGGER.debug(f"Interface {iface['ifname']} is not in wifi_devices, skipping")
                             continue
                         result['ap'].append(conf)
                     if iface['config']['mode'] == 'mesh':
@@ -251,7 +259,13 @@ class DeviceCoordinator:
                 ifname = item['ifname']
                 try:
                     _LOGGER.debug(f"Updating AP for interface: {ifname}")
-                    result[ifname] = await self.update_hostapd_clients(ifname)
+                    clients_info = await self.update_hostapd_clients(ifname)
+                    # Add the SSID to the AP information if available 
+                    if 'ssid' in item:
+                        clients_info['ssid'] = item['ssid']
+                    else:
+                        clients_info['ssid'] = ifname 
+                    result[ifname] = clients_info
                 except Exception as e:
                     _LOGGER.error(f"Error updating AP for {ifname}: {e}")
                     continue  # Continue with the next item
@@ -350,9 +364,9 @@ class DeviceCoordinator:
         return result
 
     def is_api_supported(self, name: str) -> bool:
-        _LOGGER.debug(f"Checking if the API '{name}' is supported")
+        #_LOGGER.debug(f"Checking if the API '{name}' is supported")
         if self._apis and name in self._apis:
-            _LOGGER.debug(f"The API '{name}' is supported")
+        #    _LOGGER.debug(f"The API '{name}' is supported")
             return True
         _LOGGER.debug(f"The API '{name}' is NOT supported")
         return False
