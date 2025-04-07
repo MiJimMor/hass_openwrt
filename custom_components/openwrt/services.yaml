@@ -1,49 +1,65 @@
 reboot:
   name: Reboot device
+  description: Completely reboots the OpenWrt device
   target:
     device:
       integration: openwrt
+
 exec:
   name: Execute command
+  description: Executes a command on the OpenWrt device. Useful for shell commands, network configuration or system maintenance.
   target:
     device:
       integration: openwrt
   fields:
     command:
       name: Command
-      description: Command to execute
+      description: Main command to execute (e.g., `ls`, `uci`, `opkg`).
       required: true
-      example: "wifi reload"
+      example: "uci show network"
       selector:
         text: {}
     arguments:
       name: Command arguments
       description: Arguments to append to the command (one per line)
       required: false
+#      example: |
+#        -c
+#        "wifi reload"
       selector:
         text:
           multiline: true
     environment:
       name: Environment variables
-      description: Map of Environment variables names with values
+      description: Key-value pairs of environment variables.
       required: false
+#      example: |
+#        {
+#          "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"
+#        }
       selector:
         object: {}
     extra:
       name: Extra event fields
       description: Arbitrary object added to the execute result event
       required: false
+ #     example: |
+ #       {
+ #         "source": "hass",
+ #         "timestamp": "auto"
+ #       }
       selector:
         object: {}
 init:
   name: Managing services
+  description: Starts, stops, or restarts OpenWrt system services like dnsmasq or firewall. Also works for any service configured in OpenWrt.
   target:
     device:
       integration: openwrt
   fields:
     name:
       name: Name
-      description: Service Name
+      description: Name of the service to manage (e.g., `firewall`, `dnsmasq`).
       required: true
       example: "dnsmasq"
       selector:
@@ -65,27 +81,52 @@ init:
             - "disable"
 ubus:
   name: Make arbitrary Ubus call
+  description: Makes direct calls to the OpenWrt ubus API to access advanced functions and system data
   target:
     device:
       integration: openwrt
   fields:
     subsystem:
-      name: Ubus sub-system
-      description: Top-level Ubus sub-system 
+      name: Ubus Subsystem
+      description: Top-level Ubus subsystem to access
       required: true
       example: "system"
       selector:
-        text: {}
+        select:
+          options:
+            - "network.wireless"
+            - "network.device"
+            - "iwinfo"
+            - "hostapd.*"
+            - "system"
+            - "mwan3"
+            - "luci-rpc"
+            - "services"
     method:
       name: Ubus method
-      description: Ubus method to call 
+      description: Method to call within the selected subsystem.
       required: true
-      example: "board"
+      example: "info"
       selector:
-        text: {}
+        select:
+          options:
+            - "status"
+            - "info"
+            - "assoclist"
+            - "get_clients"
+            - "wps_status"
+            - "board"
+            - "getHostHints"
+            - "get"
+            - "getStatus"
+            - "list"
     parameters:
       name: Call parameters
       description: Ubus call paramteres
       required: false
+#      example: |
+#        {
+#          "section": "lan"
+#        }
       selector:
         object: {}

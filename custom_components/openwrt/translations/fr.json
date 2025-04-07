@@ -24,15 +24,22 @@
   },
   "services": {
     "reboot": {
-      "name": "redémarrer l'appareil"
+      "name": "redémarrer l'appareil",
+      "description": "Redémarre complètement l'appareil OpenWrt"
     },
     "exec": {
+      "name": "Exécuter une commande",
+      "description": "Exécute une commande sur l'appareil OpenWrt. Utile pour les commandes shell, la configuration réseau ou la maintenance du système.",
       "fields": {
         "command": {
           "name": "Commande",
-          "description": "Commande à exécuter",
+          "description": "Commande principale à exécuter (par exemple, `ls`, `uci`, `opkg`).",
           "example": "recharger le Wi-Fi"
         },
+        "arguments": {
+          "name": "Arguments de commande",
+          "description": "Arguments à ajouter à la commande (un par ligne)"
+        },        
         "environment": {
           "name": "Variables d'environnement",
           "description": "Carte des noms de variables d'environnement avec des valeurs"
@@ -41,10 +48,11 @@
           "name": "Champs d'événement supplémentaires",
           "description": "Objet arbitraire ajouté à l'événement du résultat d'exécution"
         }
-      },
-      "name": "Exécuter une commande"
+      }
     },
     "init": {
+      "name": "Gestion des services",
+      "description": "Gère les services système OpenWrt tels que dnsmasq, le pare-feu ou tout service configuré dans OpenWrt",
       "fields": {
         "name": {
           "name": "Nom",
@@ -52,10 +60,35 @@
         },
         "action": {
           "name": "Action",
-          "description": "Actions courantes prises en charge par la plupart des services"
+          "description": "Actions courantes prises en charge par la plupart des services",
+          "options": {
+            "start": "Démarrer",
+            "stop": "Arrêter",
+            "restart": "Redémarrer",
+            "reload": "Recharger",
+            "enable": "Activer",
+            "disable": "Désactiver"
+          }
+        }
         }
       },
-      "name": "Gestion des services"
+    "ubus": {
+      "name": "Effectuer un appel Ubus arbitraire",
+      "description": "Effectue des appels directs à l'API ubus d'OpenWrt pour accéder aux fonctions avancées et aux données du système",
+      "fields": {
+        "subsystem": {
+          "name": "Sous-système Ubus",
+          "description": "Sous-système Ubus de haut niveau"
+        },
+        "method": {
+          "name": "Méthode Ubus",
+          "description": "Méthode à appeler dans le sous-système sélectionné."
+        },
+        "parameters": {
+          "name": "Paramètres d'appel",
+          "description": "Paramètres optionnels pour l'appel au format objet."
+        }
+      }
     }
   }
 }

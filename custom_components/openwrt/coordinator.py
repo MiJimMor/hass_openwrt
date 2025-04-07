@@ -357,6 +357,31 @@ class DeviceCoordinator:
             _LOGGER.warning(f"Failed to get host hints for device [{self._id}]: {err}")
             return {}
 
+    async def update_system_info(self):
+        """Get system information like uptime, memory, load"""
+        try:
+            response = await self._ubus.api_call(
+                "system",
+                "info",
+                {}
+            )
+            _LOGGER.debug(f"System info response: {response}")
+            return {
+                "uptime": response.get("uptime", 0),
+                "load": response.get("load", [0, 0, 0]),
+                "memory": response.get("memory", {}),
+                "localtime": response.get("localtime", 0),
+                "root": response.get("root", {}),
+                "tmp": response.get("tmp", {}),
+                "swap": response.get("swap", {})
+            }
+        except Exception as err:
+            _LOGGER.warning(f"Device [{self._id}] failed to get system info: {err}")
+            return {}
+
+
+
+
     async def load_ubus(self):
         _LOGGER.debug("Calling load_ubus()")
         result = await self._ubus.api_list()
@@ -385,8 +410,9 @@ class DeviceCoordinator:
                 result['mesh'] = await self.update_mesh(wireless_config['mesh'])
                 result["mwan3"] = await self.discover_mwan3()
                 result["wan"] = await self.update_wan_info()
-                # Add the host hints data
+                # Add the host hints data and system info to the result
                 result["hosts"] = await self.fetch_host_hints()
+                result["system_info"] = await self.update_system_info()
 
                 _LOGGER.debug(f"Full update [{self._id}]: {result}")
                 return result

@@ -10,6 +10,7 @@ import logging
 
 from . import OpenWrtEntity
 from .constants import DOMAIN
+from datetime import timedelta
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,11 +56,21 @@ async def async_setup_entry(
         entities.append(
             WanRxTxSensor(device, device_id, net_id, "tx")
         )
+    # Add system info sensors
+    if "system_info" in device.coordinator.data:
+        entities.append(SystemUptimeSensor(device, device_id))
+        entities.append(SystemLoadSensor(device, device_id))
+        entities.append(SystemMemorySensor(device, device_id))
+        #entities.append(SystemDiskSensor(device, device_id, "root"))
+        #entities.append(SystemDiskSensor(device, device_id, "tmp"))
+        if device.coordinator.data["system_info"].get("swap", {}).get("total", 0) > 0:
+            entities.append(SystemDiskSensor(device, device_id, "swap"))
     async_add_entities(entities)
     return True
 
 
 class OpenWrtSensor(OpenWrtEntity, SensorEntity):
+    """Base class for OpenWrt sensors."""
     def __init__(self, coordinator, device: str):
         super().__init__(coordinator, device)
 
@@ -69,6 +80,7 @@ class OpenWrtSensor(OpenWrtEntity, SensorEntity):
 
 
 class WirelessClientsSensor(OpenWrtSensor):
+    """Sensor to show the number of clients in a wireless interface."""
 
     def __init__(self, device, device_id: str, interface: str):
         super().__init__(device, device_id)
@@ -138,6 +150,7 @@ class WirelessClientsSensor(OpenWrtSensor):
 
 
 class MeshSignalSensor(OpenWrtSensor):
+    """Sensor to show the signal strength of a mesh interface."""
 
     def __init__(self, device, device_id: str, interface: str):
         super().__init__(device, device_id)
@@ -181,6 +194,7 @@ class MeshSignalSensor(OpenWrtSensor):
 
 
 class MeshPeersSensor(OpenWrtSensor):
+    """Sensor to show the number of active mesh peers in a mesh interface."""
 
     def __init__(self, device, device_id: str, interface: str):
         super().__init__(device, device_id)
@@ -218,6 +232,7 @@ class MeshPeersSensor(OpenWrtSensor):
 
 
 class WirelessTotalClientsSensor(OpenWrtSensor):
+    """Sensor to show the total number of clients in all wireless interfaces."""
 
     def __init__(self, device, device_id: str, sensors):
         super().__init__(device, device_id)
@@ -252,6 +267,7 @@ class WirelessTotalClientsSensor(OpenWrtSensor):
         return result
 
 class Mwan3OnlineSensor(OpenWrtSensor):
+    """Sensor to show the online ratio of a WAN interface."""
 
     def __init__(self, device, device_id: str, interface: str):
         super().__init__(device, device_id)
@@ -281,6 +297,7 @@ class Mwan3OnlineSensor(OpenWrtSensor):
 
 
 class WanRxTxSensor(OpenWrtSensor):
+    """Sensor to show the RX/TX bytes of a WAN interface."""
 
     def __init__(self, device, device_id: str, interface: str, code: str):
         super().__init__(device, device_id)
@@ -320,6 +337,7 @@ class WanRxTxSensor(OpenWrtSensor):
         return "total_increasing"
 
 class HostsSensor(OpenWrtSensor):
+    """Sensor to show the number of known hosts in the router."""
     def __init__(self, device, device_id: str):
         super().__init__(device, device_id)
         #self._attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -376,3 +394,153 @@ class HostsSensor(OpenWrtSensor):
         except (ValueError, AttributeError):
             # In case of invalid IP format, return a default value
             return [999, 999, 999, 999]
+
+class SystemUptimeSensor(OpenWrtSensor):
+    """System uptime sensor."""
+
+    def __init__(self, device, device_id: str):
+        super().__init__(device, device_id)
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:clock-outline"
+
+    @property
+    def unique_id(self):
+        return "%s.system_uptime" % (super().unique_id)
+
+    @property
+    def name(self):
+        return f"{super().name} System uptime"
+
+    @property
+    def state(self):
+        seconds = self.data.get("system_info", {}).get("uptime", 0)
+        # Format uptime as days, hours, minutes
+        delta = timedelta(seconds=seconds)
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "seconds": self.data.get("system_info", {}).get("uptime", 0)
+        }
+
+class SystemMemorySensor(OpenWrtSensor):
+    """System memory sensor."""
+
+    def __init__(self, device, device_id: str):
+        super().__init__(device, device_id)
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:memory"
+        self._attr_native_unit_of_measurement = "MB"
+
+    @property
+    def unique_id(self):
+        return "%s.system_memory_free" % (super().unique_id)
+
+    @property
+    def name(self):
+        return f"{super().name} System memory free"
+
+    @property
+    def native_value(self):
+        memory = self.data.get("system_info", {}).get("memory", {})
+        free = memory.get("free", 0)
+        # Convert bytes to MB
+        return round(free / (1024 * 1024), 1)
+
+    @property
+    def extra_state_attributes(self):
+        memory = self.data.get("system_info", {}).get("memory", {})
+        # Convert all values to MB for better readability
+        return {
+            "total_mb": round(memory.get("total", 0) / (1024 * 1024), 1),
+            "free_mb": round(memory.get("free", 0) / (1024 * 1024), 1),
+            "shared_mb": round(memory.get("shared", 0) / (1024 * 1024), 1),
+            "cached_mb": round(memory.get("cached", 0) / (1024 * 1024), 1),
+            "available_mb": round(memory.get("available", 0) / (1024 * 1024), 1),
+            "used_percent": round((1 - memory.get("free", 0) / memory.get("total", 1)) * 100, 1)
+        }
+
+class SystemLoadSensor(OpenWrtSensor):
+    """System load sensor."""
+
+    def __init__(self, device, device_id: str):
+        super().__init__(device, device_id)
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:cpu-64-bit"
+
+    @property
+    def unique_id(self):
+        return "%s.system_load" % (super().unique_id)
+
+    @property
+    def name(self):
+        return f"{super().name} System load"
+
+    @property
+    def state(self):
+        # Get the 1 minute load average and divide by 65536 (as per OpenWrt ubus format)
+        load = self.data.get("system_info", {}).get("load", [0, 0, 0])
+        if load and len(load) >= 3:
+            return round(load[0] / 65536, 2)
+        return 0
+
+    @property
+    def extra_state_attributes(self):
+        load = self.data.get("system_info", {}).get("load", [0, 0, 0])
+        if load and len(load) >= 3:
+            return {
+                "load_1min": round(load[0] / 65536, 2),
+                "load_5min": round(load[1] / 65536, 2),
+                "load_15min": round(load[2] / 65536, 2),
+            }
+        return {}
+
+
+
+
+#class SystemDiskSensor(OpenWrtSensor):
+#    """System disk sensor."""
+#
+#    def __init__(self, device, device_id: str, disk_type: str):
+#        super().__init__(device, device_id)
+#        self._disk_type = disk_type
+#        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+#        self._attr_icon = "mdi:harddisk"
+#        self._attr_native_unit_of_measurement = "%"
+#
+#    @property
+#    def unique_id(self):
+#        return f"{super().unique_id}.{self._disk_type}_usage"
+#
+#    @property
+#    def name(self):
+#        return f"{super().name} {self._disk_type.capitalize()} usage"
+#
+#    @property
+#    def native_value(self):
+#        disk_info = self.data.get("system_info", {}).get(self._disk_type, {})
+#        total = disk_info.get("total", 0)
+#        free = disk_info.get("free", 0)
+#        if total > 0:
+#            return round((1 - free / total) * 100, 1)
+#        return 0
+#
+#    @property
+#    def extra_state_attributes(self):
+#        disk_info = self.data.get("system_info", {}).get(self._disk_type, {})
+#        return {
+#            "total_kb": disk_info.get("total", 0),
+#            "free_kb": disk_info.get("free", 0),
+#            "used_kb": disk_info.get("used", 0),
+#            "avail_kb": disk_info.get("avail", 0)
+#        }
+

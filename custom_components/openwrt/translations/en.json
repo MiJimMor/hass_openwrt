@@ -21,6 +21,74 @@
         }
       }
     }
+  },
+  "services": {
+    "reboot": {
+      "name": "Reboot device",
+      "description": "Completely reboots the OpenWrt device"
+    },
+    "exec": {
+      "name": "Execute command",
+      "description": "Executes a command on the OpenWrt device. Useful for shell commands, network configuration or system maintenance.",
+      "fields": {
+        "command": {
+          "name": "Command",
+          "description": "Main command to execute (e.g., `ls`, `uci`, `opkg`)."
+        },
+        "arguments": {
+          "name": "Command arguments",
+          "description": "Arguments to append to the command (one per line)"
+        },
+        "environment": {
+          "name": "Environment variables",
+          "description": "Key-value pairs of environment variables."
+        },
+        "extra": {
+          "name": "Extra event fields",
+          "description": "Arbitrary object added to the execute result event"
+        }
+      }
+    },
+    "init": {
+      "name": "Managing services",
+      "description": "Starts, stops, or restarts OpenWrt system services like dnsmasq or firewall. Also works for any service configured in OpenWrt.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name of the service to manage (e.g., `firewall`, `dnsmasq`)."
+        },
+        "action": {
+          "name": "Action",
+          "description": "Common actions supported by most services.",
+          "options": {
+            "start": "start",
+            "stop": "stop",
+            "restart": "restart",
+            "reload": "reload",
+            "enable": "enable",
+            "disable": "disable"
+          }
+        }
+      }
+    },
+    "ubus": {
+      "name": "Make arbitrary Ubus call",
+      "description": "Makes direct calls to the OpenWrt ubus API to access advanced functions and system data",
+      "fields": {
+        "subsystem": {
+          "name": "Ubus Subsystem",
+          "description": "Top-level Ubus subsystem to access"
+        },
+        "method": {
+          "name": "Ubus method",
+          "description": "Method to call within the selected subsystem."
+        },
+        "parameters": {
+          "name": "Call parameters",
+          "description": "Optional parameters for the call in object format."
+        }
+      }
+    }
   }
 }
   

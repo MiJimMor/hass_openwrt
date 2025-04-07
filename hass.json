@@ -7,7 +7,7 @@
                 "network.device": ["status"],
                 "iwinfo": ["info", "assoclist"],
                 "hostapd.*": ["get_clients", "wps_status"],
-                "system": ["board"],
+                "system": ["board", "info"],
                 "mwan3": ["status"],
                 "luci-rpc": ["getHostHints"],
                 "uci": ["get"]

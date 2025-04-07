@@ -1,0 +1,93 @@
+{
+    "title": "OpenWrt",
+    "config": {
+      "step": {
+        "user": {
+          "title": "Nuevo dispositivo OpenWrt",
+          "data": {
+            "id": "Nombre del dispositivo (único)",
+            "address": "Nombre de host o dirección IP",
+            "username": "Usuario con acceso a Ubus",
+            "password": "Contraseña",
+            "https": "Usar HTTPS",
+            "verify_cert": "Verificar certificado HTTPS",
+            "port": "Puerto personalizado ('0' para usar el predeterminado)",
+            "path": "Ruta URI del endpoint Ubus",
+            "interval": "Intervalo de actualización de datos en segundos",
+            "wps": "Soporte WPS",
+            "wan_devices": "Nombres de dispositivos WAN (separados por comas)",
+            "wifi_devices": "Nombres de dispositivos Wi-Fi (separados por comas)",
+            "mesh_devices": "Nombres de dispositivos Mesh (separados por comas)"
+          }
+        }
+      }
+    },
+    "services": {
+      "reboot": {
+        "name": "Reiniciar dispositivo",
+        "description": "Reinicia el dispositivo OpenWrt completamente"
+      },
+      "exec": {
+        "name": "Ejecutar comando",
+        "description": "Ejecuta un comando en el dispositivo OpenWrt. Útil para comandos de shell, configuración de red o mantenimiento del sistema.",
+        "fields": {
+          "command": {
+            "name": "Comando",
+            "description": "Comando principal a ejecutar (por ejemplo, `ls`, `uci`, `opkg`)."
+          },
+          "arguments": {
+            "name": "Argumentos del comando",
+            "description": "Argumentos para añadir al comando (uno por línea)"
+          },
+          "environment": {
+            "name": "Variables de entorno",
+            "description": "Pares clave-valor de variables de entorno."
+          },
+          "extra": {
+            "name": "Campos adicionales de eventos",
+            "description": "Objeto arbitrario agregado al evento de resultado de la ejecución"
+          }
+        }
+      },
+      "init": {
+        "name": "Gestión de servicios",
+        "description": "Inicia, detiene o reinicia los servicios del sistema OpenWrt como dnsmasq o firewall. También funciona para cualquier servicio configurado en OpenWrt.",
+        "fields": {
+          "name": {
+            "name": "Nombre",
+            "description": "Nombre del servicio a gestionar (por ejemplo, `firewall`, `dnsmasq`)."
+          },
+          "action": {
+            "name": "Acción",
+            "description": "Acciones comunes soportadas por la mayoría de servicios",
+            "options": {
+              "start": "start",
+              "stop": "stop",
+              "restart": "restart",
+              "reload": "reload",
+              "enable": "enable",
+              "disable": "disable"
+            }
+          }
+        }
+      },
+      "ubus": {
+        "name": "Realizar llamada arbitraria a Ubus",
+        "description": "Realiza llamadas directas a la API ubus de OpenWrt para acceder a funciones avanzadas y datos del sistema",
+        "fields": {
+          "subsystem": {
+            "name": "Subsistema Ubus",
+            "description": "Subsistema de alto nivel de Ubus"
+          },
+          "method": {
+            "name": "Método Ubus",
+            "description": "Método a llamar dentro del subsistema seleccionado."
+          },
+          "parameters": {
+            "name": "Parámetros de llamada",
+            "description": "Parámetros opcionales para la llamada en formato de objeto."
+          }
+        }
+      }
+    }
+  }
