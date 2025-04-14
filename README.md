@@ -46,9 +46,11 @@
         "network.wireless": ["status"],
         "network.device": ["status"],
         "iwinfo": ["info", "assoclist"],
-        "hostapd.*": ["get_clients", "wps_status"],
-        "system": ["board"],
-        "mwan3": ["status"]
+        "hostapd.*": ["get_clients", "wps_status"]
+        "system": ["board", "info"],
+        "mwan3": ["status"],
+        "luci-rpc": ["getHostHints"],
+        "uci": ["get"]
       },
     },
     "write": {
