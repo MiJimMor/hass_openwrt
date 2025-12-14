@@ -15,7 +15,9 @@ cat << 'EOF' > "$ACL_FILE"
         "system": ["board", "info"],
         "mwan3": ["status"],
         "luci-rpc": ["getHostHints"],
-        "uci": ["get"]
+        "uci": ["get", "configs"]
+		    },		
+      "uci": ["wireless"]
       }
     },
     "write": {

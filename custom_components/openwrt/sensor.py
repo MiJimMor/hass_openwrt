@@ -45,10 +45,45 @@ async def async_setup_entry(
         entities.append(
             MeshPeersSensor(device, device_id, net_id)
         )
-    for net_id in device.coordinator.data["mwan3"]:
-        entities.append(
-            Mwan3OnlineSensor(device, device_id, net_id)
-        )
+#    for net_id in device.coordinator.data["mwan3"]:
+#        entities.append(
+#            Mwan3OnlineSensor(device, device_id, net_id)
+#        )
+    # Validate mwan3 data before creating sensors; ignore invalid entries
+    mwan3_data = device.coordinator.data.get("mwan3", {})
+    if isinstance(mwan3_data, dict):
+        for net_id, net_data in mwan3_data.items():
+            if not isinstance(net_data, dict):
+                _LOGGER.warning(
+                    "Skipping mwan3 entry '%s' for device %s: data is not a dict",
+                    net_id,
+                    device_id,
+                )
+                continue
+            # Ensure required numeric fields exist and are numbers
+            try:
+                uptime = net_data.get("uptime_sec")
+                online = net_data.get("online_sec")
+                # Accept integers or strings that can be converted to int
+                if uptime is None or online is None:
+                    raise ValueError("missing uptime_sec or online_sec")
+                uptime_val = int(uptime)
+                online_val = int(online)
+            except Exception as err:
+                _LOGGER.warning(
+                    "Skipping mwan3 entry '%s' for device %s: invalid data (%s)",
+                    net_id,
+                    device_id,
+                    err,
+                )
+                continue
+
+            entities.append(
+                Mwan3OnlineSensor(device, device_id, net_id)
+            )
+    else:
+        _LOGGER.debug("No valid 'mwan3' data available for device %s", device_id)
+
     for net_id in device.coordinator.data["wan"]:
         entities.append(
             WanRxTxSensor(device, device_id, net_id, "rx")

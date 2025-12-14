@@ -27,6 +27,7 @@ class Ubus:
         self.verify = verify
         self.session_id = ""
         self.rpc_id = 1
+        self.acls = {}  # Guardar los ACLs del login
 
     async def api_call(
         self,
@@ -56,8 +57,10 @@ class Ubus:
             "login",
             dict(username=self.username, password=self.password),
             "00000000000000000000000000000000")
-        _LOGGER.debug(f"Login result: {result}")
+        _LOGGER.debug("Login result: %s", result)
         self.session_id = result["ubus_rpc_session"]
+        self.acls = result.get("acls", {})  # Guardar los ACLs
+        _LOGGER.debug("ACLs: %s", self.acls)
 
     async def _api_call(
         self,
@@ -82,7 +85,7 @@ class Ubus:
                 "params": _params,
             }
         )
-        _LOGGER.debug(f'New API call to [{self.url}] with data: {data}')
+        _LOGGER.debug(f'New API call with data: {data}')
         self.rpc_id += 1
         try:
             def post():
@@ -102,7 +105,7 @@ class Ubus:
             raise ConnectionError(f"HTTP error: {response.status_code}")
 
         json_response = response.json()
-        _LOGGER.debug(f'Raw JSON response from [{self.url}]: {json_response}')
+        _LOGGER.debug(f'Raw JSON response from: {json_response}')
 
         if "error" in json_response:
             code = json_response['error'].get('code')
@@ -126,5 +129,16 @@ class Ubus:
             return json_response['result'][1] if len(result) > 1 else {}
         raise ConnectionError(f"RPC error: {result[0]}")
 
-    async def api_list(self):
+    async def api_list(self): 
+         """
+        Retrieve the list of available ubus commands.
+
+        .. deprecated::
+            This method is no longer in use. The accepted commands are obtained
+            during session initialization when the token is requested.
+
+        Returns:
+            dict: A dictionary containing all available ubus commands and their signatures.
+        """
+        _LOGGER.debug("Consult the list of available commands...")
         return await self.api_call("*", None, None, "list")

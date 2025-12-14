@@ -43,7 +43,88 @@ class DeviceCoordinator:
             return []
         return list([x.strip() for x in value.split(",")])
 
+    async def discover_wireless_uci(self) -> dict:
+        result = dict(ap=[], mesh=[])
+        wifi_devices = self._configured_devices("wifi_devices")
+        # Check if UCI get method is supported
+        if not self.is_api_supported("uci", "get"):
+            _LOGGER.debug(f"Device [{self._id}] doesn't support uci.get")
+            return result
+        
+        try:
+            response = await self._ubus.api_call('uci', 'get', dict(config='wireless'))
+            _LOGGER.debug(f"UCI wireless config response: {response}")
+            values = response.get('values', {})
+            
+            # First, build a mapping of device -> disabled to filter radios
+            device_disabled = {}
+            for section, data in values.items():
+                if data.get('.type') == 'wifi-device':
+                    device_name = data.get('.name')
+                    disabled = data.get('disabled', '0')
+                    # UCI returns strings, convert to boolean / UCI devuelve strings, convertir a boolean
+                    device_disabled[device_name] = disabled in ['1', 'true', True]
+
+            # Now process wifi-iface interfaces / Ahora procesar las interfaces wifi-iface
+            for section, data in values.items():
+                # Only interested in wifi-iface sections / Solo nos interesan las secciones tipo wifi-iface
+                if data.get('.type') != 'wifi-iface':
+                    continue
+
+                device = data.get('device')
+                if not device:
+                    _LOGGER.debug(f"wifi-iface {section} no tiene device")
+                    continue
+
+                # Skip if radio is disabled / Saltarse si el radio está deshabilitado
+                if device_disabled.get(device, False):
+                    _LOGGER.debug(f"Device {device} is disabled, skipping interface {section}")
+                    continue
+
+                # # Build ifname from device and section name / Construir ifname desde device y nombre de sección
+                # En UCI, el ifname típicamente se construye como "phy{index}-{mode}{number}"
+                # Pero también podemos usar el nombre de la sección como identificador
+                ifname = data.get('ifname') or data.get('ssid') or section
+                if not ifname:
+                    _LOGGER.debug(f"iface {section} no tiene ifname ni nombre de sección")
+                    continue
+
+                # network can be string or list in UCI
+                network = data.get('network')
+                if isinstance(network, list):
+                    network = network[0] if network else ""
+
+                conf = dict(ifname=ifname, network=network, device=device)
+
+                mode = data.get('mode')
+                if mode == 'ap':
+                    ssid = data.get('ssid')
+                    if ssid:
+                        conf['ssid'] = ssid
+                    else:
+                        _LOGGER.debug(f"SSID of {ifname} not found")
+
+                    if len(wifi_devices) and ifname not in wifi_devices:
+                        _LOGGER.debug(f"Interface {ifname} is not in wifi_devices, skipping")
+                        continue
+
+                    result['ap'].append(conf)
+
+                elif mode == 'mesh':
+                    # El campo mesh_id puede variar; intentar varias claves comunes
+                    mesh_id = data.get('mesh_id') or data.get('mesh') or data.get('ssid') or None
+                    if mesh_id:
+                        conf['mesh_id'] = mesh_id
+                    else:
+                        _LOGGER.debug(f"mesh_id not found for {ifname}")
+                    result['mesh'].append(conf)
+
+        except Exception as err:
+            _LOGGER.warning(f"Device [{self._id}] doesn't support wireless (uci get) or parse failed: {err}")
+        return result
+
     async def discover_wireless(self) -> dict:
+        """Discover wireless interfaces using network.wireless API."""
         result = dict(ap=[], mesh=[])
         if not self.is_api_supported("network.wireless"):
             return result
@@ -91,9 +172,14 @@ class DeviceCoordinator:
         return result
 
     async def update_mesh(self, configs) -> dict:
+        """Update mesh information."""
         mesh_devices = self._configured_devices("mesh_devices")
         result = dict()
-        if not self.is_api_supported("iwinfo"):
+#        if not self.is_api_supported("iwinfo"):
+#            return result
+        # Check both iwinfo methods needed
+        if not (self.is_api_supported("iwinfo", "info") and 
+                self.is_api_supported("iwinfo", "assoclist")):
             return result
         try:
             for conf in configs:
@@ -133,6 +219,7 @@ class DeviceCoordinator:
         return result
 
     async def update_hostapd_clients(self, interface_id: str) -> dict:
+        """Update hostapd clients for a specific interface."""
         try:
             _LOGGER.debug(f"Updating hostapd clients for interface: {interface_id}")
             response = await self._ubus.api_call(
@@ -165,7 +252,7 @@ class DeviceCoordinator:
                         dict()
                     )
                     result["wps"] = response.get("pbc_status") == "Active"
-                except ConnectionError:
+                except ConnectionError as err:
                     _LOGGER.warning(f"Interface [{interface_id}] doesn't support WPS: {err}")
 
             return result
@@ -274,6 +361,7 @@ class DeviceCoordinator:
         return result
 
     async def update_info(self) -> dict:
+        """Get basic device information."""
         result = dict()
         response = await self._ubus.api_call("system", "board", {})
         return {
@@ -286,7 +374,10 @@ class DeviceCoordinator:
         }
 
     async def discover_mwan3(self):
-        if not self.is_api_supported("mwan3"):
+#        if not self.is_api_supported("mwan3"):
+#            return dict()
+        """Discover mwan3 interfaces."""
+        if not self.is_api_supported("mwan3", "status"):
             return dict()
         result = dict()
         response = await self._ubus.api_call(
@@ -317,7 +408,7 @@ class DeviceCoordinator:
                 dict(name=device_id)
             )
             stats = response.get("statistics", {})
-            _LOGGER.debug("WAN: %s", response)
+            _LOGGER.debug("WAN info: %s", response)
             result[device_id] = {
                 "up": response.get("up", False),
                 "rx_bytes": stats.get("rx_bytes", 0),
@@ -328,11 +419,14 @@ class DeviceCoordinator:
         return result
 
     async def fetch_host_hints(self):
+#        """Fetch host hints from luci-rpc."""
+#        if not self.is_api_supported("luci-rpc"):
+#            _LOGGER.debug(f"Device [{self._id}] doesn't support luci-rpc")
+#            return {}
         """Fetch host hints from luci-rpc."""
-        if not self.is_api_supported("luci-rpc"):
-            _LOGGER.debug(f"Device [{self._id}] doesn't support luci-rpc")
-            return {}
-        
+        if not self.is_api_supported("luci-rpc", "getHostHints"):
+            _LOGGER.debug(f"Device [{self._id}] doesn't support luci-rpc.getHostHints")
+            return {}          
         try:
             response = await self._ubus.api_call(
                 "luci-rpc",
@@ -378,34 +472,114 @@ class DeviceCoordinator:
         except Exception as err:
             _LOGGER.warning(f"Device [{self._id}] failed to get system info: {err}")
             return {}
-
-
-
+## OK
+#    async def load_ubus(self):
+#        _LOGGER.debug("Calling load_ubus()")
+#        result = await self._ubus.api_list()
+#        _LOGGER.debug(f"Result of load_ubus: {result}")
+#        _LOGGER.debug("Available APIs: %s", list(result.keys()) if isinstance(result, dict) else "Not a dict")
+#        return result
 
     async def load_ubus(self):
+        """Load UBUS ACLs from the session."""
         _LOGGER.debug("Calling load_ubus()")
-        result = await self._ubus.api_list()
-        _LOGGER.debug(f"Result of load_ubus: {result}")
-        return result
+        # If ACLs are not loaded yet, we need to login first
+        if not self._ubus.acls:
+            _LOGGER.debug("ACLs not loaded yet, performing login to obtain ACLs")
+            try:
+                await self._ubus._login()
+            except Exception as err:
+                _LOGGER.error(f"Failed to login and load ACLs: {err}")
+                return {}
+        
+        # Get only the 'ubus' section from ACLs
+        acls_ubus = self._ubus.acls.get("ubus", {})
+        _LOGGER.debug("Result of load_ubus (ACLs): %s", acls_ubus)
+        _LOGGER.debug("Available APIs: %s", list(acls_ubus.keys()) if acls_ubus else "No APIs available")
+        return acls_ubus
 
-    def is_api_supported(self, name: str) -> bool:
-        #_LOGGER.debug(f"Checking if the API '{name}' is supported")
+    def is_api_supported(self, name: str, method: str = None) -> bool:
+        """
+        Check if an API is supported based on ACLs.
+        
+        Args:
+            name: The subsystem name (e.g., 'iwinfo', 'system', 'network.wireless')
+            method: Optional method name to check specific permissions
+            
+        Returns:
+            True if the API (and optionally the method) is supported
+        """
+        _LOGGER.debug(f"Checking if API '{name}' is supported" + (f" with method '{method}'" if method else ""))
+        
+        if not self._apis:
+            _LOGGER.debug(f"No APIs loaded yet, API '{name}' is NOT supported")
+            return False
+        
+        # Check if the exact subsystem exists in ACLs
+        if name in self._apis:
+            # If no method specified, just check if subsystem exists
+            if method is None:
+                _LOGGER.debug(f"API '{name}' is supported")
+                return True
+            
+            # If method specified, check if it's in the allowed methods list
+            allowed_methods = self._apis[name]
+            if method in allowed_methods:
+                _LOGGER.debug(f"API '{name}' with method '{method}' is supported")
+                return True
+            else:
+                _LOGGER.debug(f"API '{name}' exists but method '{method}' is NOT in allowed methods: {allowed_methods}")
+                return False
+        
+        _LOGGER.debug(f"API '{name}' is NOT supported")
+        return False
+
+    def is_api_supported_ori(self, name: str) -> bool:
+        _LOGGER.debug(f"Checking if the API '{name}' is supported")
         if self._apis and name in self._apis:
-        #    _LOGGER.debug(f"The API '{name}' is supported")
+            _LOGGER.debug(f"The API '{name}' is supported")
             return True
         _LOGGER.debug(f"The API '{name}' is NOT supported")
         return False
 
-
-
     def make_async_update_data(self):
         async def async_update_data():
             try:
+                # Los ACLs ya se cargaron en __init__, pero por si acaso recargamos
                 if not self._apis:
-                    self._apis = await self.load_ubus()
+                    try:
+                        self._apis = await self.load_ubus()
+                    except Exception as err:
+                        _LOGGER.error("Failed to load ubus APIs for device [%s]: %s", self._id, err)
+                        self._apis = {}
+#                if not self._apis:
+#                    self._apis = await self.load_ubus()
+                               
                 result = dict()
                 result["info"] = await self.update_info()
-                wireless_config = await self.discover_wireless()
+
+                # Prefer ubus "network.wireless" if available, otherwise fall back to UCI
+                wireless_config = dict(ap=[], mesh=[])
+                # Try the preferred ubus "network.wireless" method first. If it exists but
+                # fails, fall back to UCI-based discovery. If ubus network.wireless isn't
+                # supported, use UCI directly.
+                if self.is_api_supported("network.wireless"):
+                    _LOGGER.debug("Using ubus network.wireless for wireless discovery")
+                    try:
+                        wireless_config = await self.discover_wireless()
+                    except Exception as err:
+                        _LOGGER.warning("discover_wireless failed, trying UCI fallback: %s", err)
+                        try:
+                            wireless_config = await self.discover_wireless_uci()
+                        except Exception as err2:
+                            _LOGGER.warning("discover_wireless_uci fallback failed, using empty result: %s", err2)
+                else:
+                    _LOGGER.debug("Using UCI (uci get wireless) for wireless discovery")
+                    try:
+                        wireless_config = await self.discover_wireless_uci()
+                    except Exception as err:
+                        _LOGGER.warning("discover_wireless_uci failed, using empty result: %s", err)
+
                 result['wireless'] = await self.update_ap(wireless_config['ap'])
                 result['mesh'] = await self.update_mesh(wireless_config['mesh'])
                 result["mwan3"] = await self.discover_mwan3()
