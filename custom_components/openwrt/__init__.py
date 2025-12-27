@@ -22,7 +22,7 @@ CONFIG_SCHEMA = vol.Schema({
     }),
 }, extra=vol.ALLOW_EXTRA)
 
-
+'''
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     data = entry.as_dict()['data']
 
@@ -34,6 +34,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     await device.coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    return True
+'''
+
+from homeassistant.helpers import device_registry as dr
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    data = entry.as_dict()['data']
+    device = new_coordinator(hass, data, hass.data[DOMAIN]['devices'])
+    
+    hass.data[DOMAIN]['devices'][entry.entry_id] = device  # Backward compatibility
+    entry.runtime_data = device  # New style
+    
+    await device.coordinator.async_config_entry_first_refresh()
+    
+    # **CREAR DISPOSITIVOS EN EL REGISTRO**
+    device_registry = dr.async_get(hass)
+    
+    # 1. Crear dispositivo principal del router
+    router_info = device.coordinator.data.get("info", {})
+    router_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("openwrt", device._id)},
+        name=f"OpenWrt [{device._id}]",
+        manufacturer=router_info.get("manufacturer", "OpenWrt"),
+        model=router_info.get("model", "Router"),
+        sw_version=router_info.get("sw_version", ""),
+    )
+    
+    # 2. Crear un dispositivo para cada AP
+    for ifname, ap_data in device.coordinator.data.get("aps", {}).items():
+        ssid = ap_data.get("ssid", "Unknown")
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={("openwrt_ap", ifname)},
+            name=f"Wireless [{ssid}]",
+            manufacturer="OpenWrt",
+            model="Access Point",
+            # Vincular al router como padre
+            via_device=("openwrt", device._id),
+        )
+    
+    # Forward setup a las plataformas
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    
     return True
 
 
@@ -115,7 +159,8 @@ class OpenWrtEntity(CoordinatorEntity):
     def device_info(self):
         return {
             "identifiers": {
-                ("id", self._device_id)
+#                ("id", self._device_id)
+                ("openwrt", self._device_id)
             },
             "name": f"OpenWrt [{self._device_id}]",
             "model": self.data["info"]["model"],

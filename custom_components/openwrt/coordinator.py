@@ -533,7 +533,7 @@ class DeviceCoordinator:
         
         _LOGGER.debug(f"API '{name}' is NOT supported")
         return False
-
+    """ funciones originales para referencia
     def is_api_supported_ori(self, name: str) -> bool:
         _LOGGER.debug(f"Checking if the API '{name}' is supported")
         if self._apis and name in self._apis:
@@ -542,7 +542,7 @@ class DeviceCoordinator:
         _LOGGER.debug(f"The API '{name}' is NOT supported")
         return False
 
-    def make_async_update_data(self):
+    def make_async_update_data_ori(self):
         async def async_update_data():
             try:
                 # Los ACLs ya se cargaron en __init__, pero por si acaso recargamos
@@ -596,6 +596,106 @@ class DeviceCoordinator:
                 _LOGGER.exception(f"Device [{self._id}] async_update_data error: {err}")
                 raise UpdateFailed(f"OpenWrt communication error: {err}")
         return async_update_data
+    """
+    def make_async_update_data(self):
+        async def async_update_data():
+            try:
+                # Los ACLs ya se cargaron en __init__, pero por si acaso recargamos
+                if not self._apis:
+                    try:
+                        self._apis = await self.load_ubus()
+                    except Exception as err:
+                        _LOGGER.error("Failed to load ubus APIs for device [%s]: %s", self._id, err)
+                        self._apis = {}
+
+                result = dict()
+                result["info"] = await self.update_info()
+                
+                # Prefer ubus "network.wireless" if available, otherwise fall back to UCI
+                wireless_config = dict(ap=[], mesh=[])
+                
+                if self.is_api_supported("network.wireless"):
+                    _LOGGER.debug("Using ubus network.wireless for wireless discovery")
+                    try:
+                        wireless_config = await self.discover_wireless()
+                    except Exception as err:
+                        _LOGGER.warning("discover_wireless failed, trying UCI fallback: %s", err)
+                        try:
+                            wireless_config = await self.discover_wireless_uci()
+                        except Exception as err2:
+                            _LOGGER.warning("discover_wireless_uci fallback failed, using empty result: %s", err2)
+                else:
+                    _LOGGER.debug("Using UCI (uci get wireless) for wireless discovery")
+                    try:
+                        wireless_config = await self.discover_wireless_uci()
+                    except Exception as err:
+                        _LOGGER.warning("discover_wireless_uci failed, using empty result: %s", err)
+                
+                # Actualizar datos de APs
+                result['wireless'] = await self.update_ap(wireless_config['ap'])
+                
+                # **NUEVA ESTRUCTURA**: Crear diccionarios para jerarquía de dispositivos
+                result['aps'] = {}  # Info de cada AP
+                result['wireless_clients'] = {}  # Clientes por AP
+                result['hostnames'] = {}  # Resolución de hostnames
+                
+                # Obtener host hints una sola vez
+                hosts = await self.fetch_host_hints()
+                
+                # Procesar cada AP y sus clientes
+                for ap_config in wireless_config['ap']:
+                    ifname = ap_config.get('ifname')
+                    ssid = ap_config.get('ssid', 'Unknown')
+                    
+                    if not ifname:
+                        continue
+                    
+                    # Guardar info del AP
+                    result['aps'][ifname] = {
+                        'ssid': ssid,
+                        'ifname': ifname,
+                        'network': ap_config.get('network', ''),
+                        'device': ap_config.get('device', ''),
+                    }
+                    
+                    # Obtener clientes del AP
+                    ap_clients_data = result['wireless'].get(ifname, {})
+                    client_macs = ap_clients_data.get('macs', {})
+                    
+                    # Guardar clientes estructurados por AP
+                    result['wireless_clients'][ifname] = {}
+                    
+                    for mac, client_info in client_macs.items():
+                        mac_upper = mac.upper()
+                        result['wireless_clients'][ifname][mac_upper] = {
+                            'signal': client_info.get('signal'),
+                            'mac': mac_upper,
+                            'connected': True,
+                        }
+                        
+                        # Guardar hostname si existe
+                        if mac_upper in hosts:
+                            hostname = hosts[mac_upper].get('name')
+                            if hostname:
+                                result['hostnames'][mac_upper] = hostname
+                
+                result['mesh'] = await self.update_mesh(wireless_config['mesh'])
+                result["mwan3"] = await self.discover_mwan3()
+                result["wan"] = await self.update_wan_info()
+                result["hosts"] = hosts
+                result["system_info"] = await self.update_system_info()
+                
+                _LOGGER.debug(f"Full update [{self._id}]: {result}")
+                return result
+                
+            except PermissionError as err:
+                raise ConfigEntryAuthFailed from err
+            except Exception as err:
+                _LOGGER.exception(f"Device [{self._id}] async_update_data error: {err}")
+                raise UpdateFailed(f"OpenWrt communication error: {err}")
+        
+        return async_update_data
+
 
 def new_ubus_client(hass, config: dict) -> Ubus:
     _LOGGER.debug(f"new_ubus_client(): {config}")

@@ -120,7 +120,20 @@ class WirelessClientsSensor(OpenWrtSensor):
     def __init__(self, device, device_id: str, interface: str):
         super().__init__(device, device_id)
         self._interface_id = interface
-
+    
+    @property
+    def device_info(self):
+        """Vincular este sensor al dispositivo AP."""
+        ssid = self.data['wireless'][self._interface_id].get('ssid', self._interface_id)
+        
+        return DeviceInfo(
+            identifiers={("openwrt_ap", self._interface_id)},
+            name=f"Wireless [{ssid}]",
+            manufacturer="OpenWrt",
+            model="Access Point",
+            via_device=("openwrt", self._device_id),
+        )
+    
     @property
     def unique_id(self):
         return "%s.%s.clients" % (super().unique_id, self._interface_id)
