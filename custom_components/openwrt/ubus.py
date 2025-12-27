@@ -130,7 +130,7 @@ class Ubus:
         raise ConnectionError(f"RPC error: {result[0]}")
 
     async def api_list(self): 
-         """
+        """
         Retrieve the list of available ubus commands.
 
         .. deprecated::
